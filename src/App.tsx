@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   CheckCircle2,
   ClipboardList,
-  FilePlus2,
   FileSpreadsheet,
   LayoutDashboard,
+  Receipt,
   X,
 } from 'lucide-react';
 import { ChequeForm, ChequeFormValues } from './components/ChequeForm';
@@ -12,6 +12,7 @@ import { ChequeTable } from './components/ChequeTable';
 import { ConfirmMutationModal } from './components/ConfirmMutationModal';
 import { DailyDashboard } from './components/DailyDashboard';
 import { ReceivablesDashboard } from './components/ReceivablesDashboard';
+import { ServiceBillingDashboard } from './components/ServiceBillingDashboard';
 import {
   createCheque,
   fetchCheques,
@@ -25,11 +26,13 @@ import {
   fetchReceivablesDataset,
   saveUploadedReceivablesCsv,
 } from './lib/receivablesApi';
+import { fetchServiceBillingDataset } from './lib/serviceBillingApi';
 import { notifyTelegram } from './lib/telegramClient';
 import { ChequeRecord } from './types/cheque';
 import { parseReceivablesCsv, ReceivablesDataset } from './types/receivable';
+import { ServiceBillingDataset } from './types/serviceBilling';
 
-type ActiveTab = 'overview' | 'form' | 'list' | 'receivables';
+type ActiveTab = 'overview' | 'list' | 'receivables' | 'service-billing';
 
 interface ToastState {
   id: number;
@@ -58,6 +61,9 @@ export default function App() {
 
   const [receivablesDataset, setReceivablesDataset] = useState<ReceivablesDataset | null>(null);
   const [isLoadingReceivables, setIsLoadingReceivables] = useState<boolean>(true);
+  const [serviceBillingDataset, setServiceBillingDataset] = useState<ServiceBillingDataset | null>(null);
+  const [isLoadingServiceBilling, setIsLoadingServiceBilling] = useState<boolean>(true);
+  const [isFormModalOpen, setIsFormModalOpen] = useState<boolean>(false);
 
   const showToast = useCallback((type: ToastState['type'], message: string) => {
     const id = Date.now();
@@ -111,10 +117,34 @@ export default function App() {
     [showToast]
   );
 
+  const loadServiceBilling = useCallback(
+    async (showSuccessToast = false) => {
+      setIsLoadingServiceBilling(true);
+      try {
+        const data = await fetchServiceBillingDataset();
+        setServiceBillingDataset(data);
+        if (showSuccessToast) {
+          showToast(
+            'success',
+            `ซิงค์รายการงานวางบิลฝ่าย Service สำเร็จ (${data.records.length.toLocaleString('th-TH')} งาน)`
+          );
+        }
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : 'ไม่สามารถโหลดรายการงานวางบิลฝ่าย Service ได้';
+        showToast('error', msg);
+      } finally {
+        setIsLoadingServiceBilling(false);
+      }
+    },
+    [showToast]
+  );
+
   useEffect(() => {
     loadCheques();
     loadReceivables(false);
-  }, [loadCheques, loadReceivables]);
+    loadServiceBilling(false);
+  }, [loadCheques, loadReceivables, loadServiceBilling]);
 
   const handleCreateCheque = async (values: ChequeFormValues): Promise<boolean> => {
     setIsSubmitting(true);
@@ -134,9 +164,7 @@ export default function App() {
         showToast('warning', `บันทึกข้อมูลแล้ว แต่แจ้งเตือน Telegram ไม่สำเร็จ: ${telegram.message}`);
       }
 
-      if (activeTab === 'form') {
-        setActiveTab('overview');
-      }
+      setIsFormModalOpen(false);
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'บันทึกข้อมูลไม่สำเร็จ';
@@ -236,15 +264,15 @@ export default function App() {
 
   const navItems: Array<{ id: ActiveTab; label: string }> = [
     { id: 'overview', label: 'ภาพรวม' },
-    { id: 'form', label: 'บันทึกรับเช็ค' },
     { id: 'list', label: 'รายการเช็ค' },
     { id: 'receivables', label: 'รายงานลูกหนี้ค้างชำระ' },
+    { id: 'service-billing', label: 'รายการงานวางบิลฝ่าย service' },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 md:pb-10">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 lg:pb-10">
       <header className="sticky top-0 z-30 h-12 md:h-14 bg-white/95 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-8">
+        <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4 xl:gap-8">
           <button
             type="button"
             onClick={() => setActiveTab('overview')}
@@ -253,7 +281,7 @@ export default function App() {
             Service Cheque
           </button>
 
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600" aria-label="เมนูหลัก">
+          <nav className="hidden lg:flex items-center gap-4 xl:gap-6 text-xs xl:text-sm font-medium text-slate-600" aria-label="เมนูหลัก">
             {navItems.map((item) => (
               <button
                 key={item.id}
@@ -273,10 +301,10 @@ export default function App() {
           <div className="flex items-center shrink-0">
             <button
               type="button"
-              onClick={() => setActiveTab('form')}
+              onClick={() => setIsFormModalOpen(true)}
               className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-white bg-teal-700 rounded-lg hover:bg-teal-800 transition-colors whitespace-nowrap shrink-0"
             >
-              บันทึกเช็คใหม่
+              บันทึกรายการแจ้งเตือนการรับเช็คใหม่
             </button>
           </div>
         </div>
@@ -289,40 +317,20 @@ export default function App() {
               records={records}
               onQuickFilterZone={handleQuickFilterZone}
               onQuickFilterStatus={handleQuickFilterStatus}
-              onOpenNewForm={() => setActiveTab('form')}
+              onOpenNewForm={() => setIsFormModalOpen(true)}
             />
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <div className="hidden lg:block lg:col-span-4">
-                <ChequeForm
-                  onSubmit={handleCreateCheque}
-                  isSubmitting={isSubmitting}
-                />
-              </div>
-
-              <div className="lg:col-span-8">
-                <ChequeTable
-                  records={records}
-                  zoneFilter={zoneFilter}
-                  onZoneFilterChange={setZoneFilter}
-                  statusFilter={statusFilter}
-                  onStatusFilterChange={setStatusFilter}
-                  onRequestUpdate={handleRequestUpdate}
-                  onResendTelegram={handleResendTelegram}
-                  onImportCsv={handleImportCsvText}
-                  onRefresh={loadCheques}
-                  isLoading={isSyncing}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'form' && (
-          <div className="max-w-2xl mx-auto">
-            <ChequeForm
-              onSubmit={handleCreateCheque}
-              isSubmitting={isSubmitting}
+            <ChequeTable
+              records={records}
+              zoneFilter={zoneFilter}
+              onZoneFilterChange={setZoneFilter}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              onRequestUpdate={handleRequestUpdate}
+              onResendTelegram={handleResendTelegram}
+              onImportCsv={handleImportCsvText}
+              onRefresh={loadCheques}
+              isLoading={isSyncing}
             />
           </div>
         )}
@@ -351,18 +359,26 @@ export default function App() {
             onResetToSnapshot={handleResetReceivablesToSnapshot}
           />
         )}
+
+        {activeTab === 'service-billing' && (
+          <ServiceBillingDashboard
+            dataset={serviceBillingDataset}
+            isLoading={isLoadingServiceBilling}
+            onRefresh={() => loadServiceBilling(true)}
+          />
+        )}
       </main>
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-white/95 backdrop-blur-md border-t border-slate-200 md:hidden grid grid-cols-4"
+        className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-white/95 backdrop-blur-md border-t border-slate-200 lg:hidden grid grid-cols-4"
         aria-label="แถบนำทางมือถือ"
       >
         {(
           [
             { id: 'overview', label: 'ภาพรวม', Icon: LayoutDashboard },
-            { id: 'form', label: 'บันทึกเช็ค', Icon: FilePlus2 },
             { id: 'list', label: 'รายการเช็ค', Icon: ClipboardList },
             { id: 'receivables', label: 'ลูกหนี้ค้าง', Icon: FileSpreadsheet },
+            { id: 'service-billing', label: 'งานวางบิล', Icon: Receipt },
           ] as const
         ).map(({ id, label, Icon }) => {
           const isActive = activeTab === id;
@@ -381,6 +397,27 @@ export default function App() {
           );
         })}
       </nav>
+
+      {isFormModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/50 backdrop-blur-xs p-0 md:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="กล่องกรอกข้อมูลบันทึกรับเช็ค"
+          onClick={() => !isSubmitting && setIsFormModalOpen(false)}
+        >
+          <div
+            className="w-full md:max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl md:rounded-xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ChequeForm
+              onSubmit={handleCreateCheque}
+              isSubmitting={isSubmitting}
+              onClose={() => !isSubmitting && setIsFormModalOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       <ConfirmMutationModal
         isOpen={Boolean(pendingMutation)}

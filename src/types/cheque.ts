@@ -8,6 +8,11 @@ export const CHEQUE_STATUSES = [
   'เข้าบัญชีแล้ว',
   'เลื่อนรับเช็ค',
   'เช็คมีปัญหา / ยกเลิก',
+  'กำลังดำเนินการติดตาม',
+  'รอลดหนี้ในระบบ',
+  'ติดตามวางบิลใหม่',
+  'รอแก้ไขเอกสารเพิ่มเติม',
+  'อื่นๆ',
 ] as const;
 export type ChequeStatus = (typeof CHEQUE_STATUSES)[number];
 

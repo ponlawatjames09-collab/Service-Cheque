@@ -9,6 +9,11 @@ const ALLOWED_STATUSES = [
   'เข้าบัญชีแล้ว',
   'เลื่อนรับเช็ค',
   'เช็คมีปัญหา / ยกเลิก',
+  'กำลังดำเนินการติดตาม',
+  'รอลดหนี้ในระบบ',
+  'ติดตามวางบิลใหม่',
+  'รอแก้ไขเอกสารเพิ่มเติม',
+  'อื่นๆ',
 ] as const;
 
 interface VercelReq {
@@ -133,8 +138,9 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       const remark = String(row[5] ?? '').trim();
       const zoneOwner = String(row[6] ?? '').trim() === 'ลูกกอล์ฟ' ? 'ลูกกอล์ฟ' : 'โอ';
       const statusRaw = String(row[7] ?? '').trim();
-      const status = (ALLOWED_STATUSES as readonly string[]).includes(statusRaw)
-        ? statusRaw
+      const normalizedRaw = statusRaw === 'อืนๆ' ? 'อื่นๆ' : statusRaw;
+      const status = (ALLOWED_STATUSES as readonly string[]).includes(normalizedRaw)
+        ? normalizedRaw
         : 'รอรับเช็ค';
       const technician = String(row[8] ?? '').trim() || 'รวิ สวัสดี';
 

@@ -9,6 +9,11 @@ const ALLOWED_STATUSES = [
   'เข้าบัญชีแล้ว',
   'เลื่อนรับเช็ค',
   'เช็คมีปัญหา / ยกเลิก',
+  'กำลังดำเนินการติดตาม',
+  'รอลดหนี้ในระบบ',
+  'ติดตามวางบิลใหม่',
+  'รอแก้ไขเอกสารเพิ่มเติม',
+  'อื่นๆ',
 ] as const;
 
 interface StoredChequeRecord {
@@ -75,7 +80,8 @@ function normalizeZone(val: unknown): (typeof ALLOWED_ZONES)[number] {
 }
 
 function normalizeStatus(val: unknown): (typeof ALLOWED_STATUSES)[number] {
-  const s = String(val ?? '').trim();
+  const raw = String(val ?? '').trim();
+  const s = raw === 'อืนๆ' ? 'อื่นๆ' : raw;
   if ((ALLOWED_STATUSES as readonly string[]).includes(s)) {
     return s as (typeof ALLOWED_STATUSES)[number];
   }

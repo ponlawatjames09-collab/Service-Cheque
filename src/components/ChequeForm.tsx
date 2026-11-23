@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Send } from 'lucide-react';
+import { Send, X } from 'lucide-react';
 import {
   CHEQUE_STATUSES,
   ChequeRecord,
@@ -17,6 +17,7 @@ interface ChequeFormProps {
   isSubmitting: boolean;
   initialValues?: Partial<ChequeFormValues>;
   submitLabel?: string;
+  onClose?: () => void;
 }
 
 export function ChequeForm({
@@ -24,6 +25,7 @@ export function ChequeForm({
   isSubmitting,
   initialValues,
   submitLabel = 'บันทึกข้อมูลและแจ้งเตือน Telegram',
+  onClose,
 }: ChequeFormProps) {
   const [date, setDate] = useState(initialValues?.date ?? getTodayBangkokISO());
   const [invoice, setInvoice] = useState(initialValues?.invoice ?? '');
@@ -94,6 +96,16 @@ export function ChequeForm({
             บันทึกข้อมูลเข้า Google Sheet และส่งแจ้งเตือน Telegram ทันที
           </p>
         </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดหน้าต่าง"
+            className="min-h-[40px] min-w-[40px] -mr-2 -mt-1 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {errorMsg && (

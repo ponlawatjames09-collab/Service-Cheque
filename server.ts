@@ -7,6 +7,7 @@ import chequesHandler from './api/cheques.ts';
 import healthHandler from './api/health.ts';
 import importSheetHandler from './api/import-sheet.ts';
 import receivablesHandler from './api/receivables.ts';
+import serviceBillingHandler from './api/service-billing.ts';
 import telegramNotifyHandler from './api/telegram/notify.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,6 +33,10 @@ async function startServer() {
 
   app.all('/api/receivables', (req, res) => {
     void receivablesHandler(req, res);
+  });
+
+  app.all('/api/service-billing', (req, res) => {
+    void serviceBillingHandler(req, res);
   });
 
   app.all('/api/telegram/notify', (req, res) => {
