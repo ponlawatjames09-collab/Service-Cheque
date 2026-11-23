@@ -4,18 +4,21 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import {
+  bulkImportLocalRecords,
   createChequeRecord,
+  fetchPublicGoogleSheetRecords,
   isGoogleSheetsWebhookConfigured,
   listChequeRecords,
+  parseSheetCsvToRecords,
   updateChequeRecord,
   validateChequeInput,
   validateChequePatch,
-} from './server/chequeStore.ts';
+} from './api/_lib/chequeStore.js';
 import {
   isTelegramConfigured,
   sendTelegramNotification,
   validateNotifyBody,
-} from './server/telegramService.ts';
+} from './api/_lib/telegramService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +27,7 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(express.json({ limit: '100kb' }));
+  app.use(express.json({ limit: '512kb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({
@@ -89,6 +92,49 @@ async function startServer() {
       return res.json({ ok: true, record, telegram });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'ไม่สามารถอัปเดตข้อมูลได้';
+      return res.status(502).json({ ok: false, message: msg });
+    }
+  });
+
+  app.post('/api/import-sheet', async (req, res) => {
+    try {
+      const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<
+        string,
+        unknown
+      >;
+
+      if (typeof body.sheetUrlOrId === 'string' && body.sheetUrlOrId.trim()) {
+        const sheetRecords = await fetchPublicGoogleSheetRecords(body.sheetUrlOrId);
+        const merged = await bulkImportLocalRecords(sheetRecords);
+        return res.json({
+          ok: true,
+          importedCount: sheetRecords.length,
+          records: merged,
+        });
+      }
+
+      if (typeof body.csvText === 'string' && body.csvText.trim()) {
+        const csvRecords = parseSheetCsvToRecords(body.csvText);
+        if (csvRecords.length === 0) {
+          return res.status(400).json({
+            ok: false,
+            message: 'ไม่พบแถวข้อมูลในไฟล์ CSV',
+          });
+        }
+        const merged = await bulkImportLocalRecords(csvRecords);
+        return res.json({
+          ok: true,
+          importedCount: csvRecords.length,
+          records: merged,
+        });
+      }
+
+      return res.status(400).json({
+        ok: false,
+        message: 'กรุณาระบุลิงก์ Google Sheet หรือไฟล์ CSV',
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'นำเข้าข้อมูลไม่สำเร็จ';
       return res.status(502).json({ ok: false, message: msg });
     }
   });

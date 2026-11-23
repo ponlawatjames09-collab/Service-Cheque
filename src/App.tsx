@@ -4,26 +4,24 @@ import {
   ClipboardList,
   FilePlus2,
   LayoutDashboard,
-  Link2,
-  RefreshCw,
   X,
 } from 'lucide-react';
 import { ChequeForm, ChequeFormValues } from './components/ChequeForm';
 import { ChequeTable } from './components/ChequeTable';
 import { ConfirmMutationModal } from './components/ConfirmMutationModal';
 import { DailyDashboard } from './components/DailyDashboard';
-import { SheetsConnectionPanel } from './components/SheetsConnectionPanel';
 import {
   createCheque,
   fetchCheques,
-  fetchServerHealth,
+  importFromCsvText,
   patchCheque,
   StorageMode,
+  writeCachedLocalRecords,
 } from './lib/chequeApi';
 import { notifyTelegram } from './lib/telegramClient';
 import { ChequeRecord } from './types/cheque';
 
-type ActiveTab = 'overview' | 'form' | 'list' | 'connect';
+type ActiveTab = 'overview' | 'form' | 'list';
 
 interface ToastState {
   id: number;
@@ -42,19 +40,12 @@ export default function App() {
   const [zoneFilter, setZoneFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Server storage & integration readiness (no login required)
   const [storageMode, setStorageMode] = useState<StorageMode>('local_server');
-  const [googleSheetWebhookConfigured, setGoogleSheetWebhookConfigured] =
-    useState<boolean>(false);
-  const [telegramConfigured, setTelegramConfigured] = useState<boolean | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Confirmation modal for updating existing rows
   const [pendingMutation, setPendingMutation] = useState<PendingMutation | null>(null);
   const [isConfirmingMutation, setIsConfirmingMutation] = useState<boolean>(false);
-
-  // Toast notification
   const [toast, setToast] = useState<ToastState | null>(null);
 
   const showToast = useCallback((type: ToastState['type'], message: string) => {
@@ -80,10 +71,6 @@ export default function App() {
   }, [showToast]);
 
   useEffect(() => {
-    fetchServerHealth().then((health) => {
-      setTelegramConfigured(health.telegramConfigured);
-      setGoogleSheetWebhookConfigured(health.googleSheetWebhookConfigured);
-    });
     loadCheques();
   }, [loadCheques]);
 
@@ -91,22 +78,16 @@ export default function App() {
     setIsSubmitting(true);
     try {
       const { record, telegram } = await createCheque(values);
-      setRecords((prev) => [record, ...prev]);
+      setRecords((prev) => {
+        const next = [record, ...prev];
+        if (storageMode === 'local_server') writeCachedLocalRecords(next);
+        return next;
+      });
 
       if (telegram.ok) {
-        showToast(
-          'success',
-          record.syncedToSheet
-            ? 'บันทึกเข้า Google Sheet และส่งแจ้งเตือน Telegram แล้ว'
-            : 'บันทึกข้อมูลและส่งแจ้งเตือน Telegram แล้ว'
-        );
+        showToast('success', 'บันทึกข้อมูลและส่งแจ้งเตือน Telegram เรียบร้อยแล้ว');
       } else if (!telegram.configured) {
-        showToast(
-          'warning',
-          record.syncedToSheet
-            ? 'บันทึกเข้า Google Sheet แล้ว (รอตั้งค่า Telegram บนเซิร์ฟเวอร์)'
-            : 'บันทึกข้อมูลแล้ว (รอตั้งค่า Telegram บนเซิร์ฟเวอร์)'
-        );
+        showToast('warning', 'บันทึกข้อมูลเรียบร้อย (รอตั้งค่า Telegram บนเซิร์ฟเวอร์)');
       } else {
         showToast('warning', `บันทึกข้อมูลแล้ว แต่แจ้งเตือน Telegram ไม่สำเร็จ: ${telegram.message}`);
       }
@@ -135,7 +116,11 @@ export default function App() {
     setIsConfirmingMutation(true);
     try {
       const { record, telegram } = await patchCheque(original, updated);
-      setRecords((prev) => prev.map((r) => (r.id === original.id ? record : r)));
+      setRecords((prev) => {
+        const next = prev.map((r) => (r.id === original.id ? record : r));
+        if (storageMode === 'local_server') writeCachedLocalRecords(next);
+        return next;
+      });
       setPendingMutation(null);
 
       if (telegram.ok) {
@@ -162,6 +147,18 @@ export default function App() {
     }
   };
 
+  const handleImportCsvText = async (csvText: string) => {
+    try {
+      const res = await importFromCsvText(csvText);
+      setRecords(res.records);
+      writeCachedLocalRecords(res.records);
+      showToast('success', `นำเข้าไฟล์ CSV สำเร็จ (${res.importedCount} รายการ)`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'นำเข้าไฟล์ CSV ไม่สำเร็จ';
+      showToast('error', msg);
+    }
+  };
+
   const handleQuickFilterZone = (zone: string) => {
     setZoneFilter((prev) => (prev === zone ? 'all' : zone));
   };
@@ -174,12 +171,10 @@ export default function App() {
     { id: 'overview', label: 'ภาพรวม' },
     { id: 'form', label: 'บันทึกรับเช็ค' },
     { id: 'list', label: 'รายการเช็ค' },
-    { id: 'connect', label: 'เชื่อมต่อระบบ' },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 md:pb-10">
-      {/* Top Navigation Bar (Strict 3-Zone Contract) */}
       <header className="sticky top-0 z-30 h-12 md:h-14 bg-white/95 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-8">
           <button
@@ -219,29 +214,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content Viewport (No Login Required) */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 sm:pt-7 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 px-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium text-slate-700">
-              {storageMode === 'google_sheet_webhook'
-                ? 'เชื่อมต่อ Google Sheets อัตโนมัติ'
-                : 'ระบบฐานข้อมูลพร้อมใช้งาน'}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>ไม่ต้องเข้าสู่ระบบ</span>
-          </div>
-          <button
-            type="button"
-            onClick={loadCheques}
-            disabled={isSyncing}
-            className="inline-flex items-center gap-1.5 font-medium text-teal-700 hover:text-teal-900 disabled:opacity-60 whitespace-nowrap"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'กำลังโหลด...' : 'รีเฟรชข้อมูล'}</span>
-          </button>
-        </div>
-
         {activeTab === 'overview' && (
           <div className="space-y-6">
             <DailyDashboard
@@ -256,7 +229,6 @@ export default function App() {
                 <ChequeForm
                   onSubmit={handleCreateCheque}
                   isSubmitting={isSubmitting}
-                  isSheetConnected={googleSheetWebhookConfigured}
                 />
               </div>
 
@@ -269,6 +241,8 @@ export default function App() {
                   onStatusFilterChange={setStatusFilter}
                   onRequestUpdate={handleRequestUpdate}
                   onResendTelegram={handleResendTelegram}
+                  onImportCsv={handleImportCsvText}
+                  onRefresh={loadCheques}
                   isLoading={isSyncing}
                 />
               </div>
@@ -281,7 +255,6 @@ export default function App() {
             <ChequeForm
               onSubmit={handleCreateCheque}
               isSubmitting={isSubmitting}
-              isSheetConnected={googleSheetWebhookConfigured}
             />
           </div>
         )}
@@ -295,24 +268,15 @@ export default function App() {
             onStatusFilterChange={setStatusFilter}
             onRequestUpdate={handleRequestUpdate}
             onResendTelegram={handleResendTelegram}
+            onImportCsv={handleImportCsvText}
+            onRefresh={loadCheques}
             isLoading={isSyncing}
-          />
-        )}
-
-        {activeTab === 'connect' && (
-          <SheetsConnectionPanel
-            storageMode={storageMode}
-            googleSheetWebhookConfigured={googleSheetWebhookConfigured}
-            telegramConfigured={telegramConfigured}
-            isSyncing={isSyncing}
-            onSyncNow={loadCheques}
           />
         )}
       </main>
 
-      {/* Mobile Bottom Thumb-Zone Navigation Bar (56px height) */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-white/95 backdrop-blur-md border-t border-slate-200 md:hidden grid grid-cols-4"
+        className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-white/95 backdrop-blur-md border-t border-slate-200 md:hidden grid grid-cols-3"
         aria-label="แถบนำทางมือถือ"
       >
         {(
@@ -320,7 +284,6 @@ export default function App() {
             { id: 'overview', label: 'ภาพรวม', Icon: LayoutDashboard },
             { id: 'form', label: 'บันทึกเช็ค', Icon: FilePlus2 },
             { id: 'list', label: 'รายการ', Icon: ClipboardList },
-            { id: 'connect', label: 'เชื่อมต่อ', Icon: Link2 },
           ] as const
         ).map(({ id, label, Icon }) => {
           const isActive = activeTab === id;
@@ -340,15 +303,10 @@ export default function App() {
         })}
       </nav>
 
-      {/* Confirmation Dialog for Row Updates */}
       <ConfirmMutationModal
         isOpen={Boolean(pendingMutation)}
         title="ยืนยันการอัปเดตข้อมูลเช็ค"
-        description={
-          storageMode === 'google_sheet_webhook'
-            ? 'ต้องการบันทึกการเปลี่ยนแปลงลงใน Google Sheet และส่งแจ้งเตือนผ่าน Telegram หรือไม่?'
-            : 'ต้องการอัปเดตข้อมูลรายการนี้และส่งแจ้งเตือนผ่าน Telegram หรือไม่?'
-        }
+        description="ต้องการบันทึกการเปลี่ยนแปลงข้อมูลรายการนี้และส่งแจ้งเตือนผ่าน Telegram หรือไม่?"
         details={
           pendingMutation
             ? [
@@ -371,7 +329,6 @@ export default function App() {
         onCancel={() => setPendingMutation(null)}
       />
 
-      {/* Feedback Toast */}
       {toast && (
         <div
           role="status"

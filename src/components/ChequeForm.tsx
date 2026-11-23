@@ -15,7 +15,6 @@ export type ChequeFormValues = Omit<ChequeRecord, 'id' | 'rowNumber' | 'syncedTo
 interface ChequeFormProps {
   onSubmit: (values: ChequeFormValues) => Promise<boolean>;
   isSubmitting: boolean;
-  isSheetConnected: boolean;
   initialValues?: Partial<ChequeFormValues>;
   submitLabel?: string;
 }
@@ -23,7 +22,6 @@ interface ChequeFormProps {
 export function ChequeForm({
   onSubmit,
   isSubmitting,
-  isSheetConnected,
   initialValues,
   submitLabel = 'บันทึกข้อมูลและแจ้งเตือน Telegram',
 }: ChequeFormProps) {
@@ -93,9 +91,7 @@ export function ChequeForm({
         <div>
           <h2 className="text-base font-semibold text-slate-900">ฟอร์มบันทึกรับเช็ค</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            {isSheetConnected
-              ? 'บันทึกเข้า Google Sheet และส่งแจ้งเตือน Telegram ทันที'
-              : 'บันทึกข้อมูลเข้าระบบและส่งแจ้งเตือน Telegram ทันที'}
+            บันทึกข้อมูลเข้า Google Sheet และส่งแจ้งเตือน Telegram ทันที
           </p>
         </div>
       </div>

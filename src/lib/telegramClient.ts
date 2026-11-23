@@ -17,7 +17,8 @@ export async function checkServerHealth(): Promise<TelegramHealthResponse> {
     if (!res.ok) {
       return { ok: false, telegramConfigured: false };
     }
-    return (await res.json()) as TelegramHealthResponse;
+    const raw = await res.text();
+    return JSON.parse(raw) as TelegramHealthResponse;
   } catch {
     return { ok: false, telegramConfigured: false };
   }
@@ -49,7 +50,8 @@ export async function notifyTelegram(
       }),
     });
 
-    return (await res.json()) as TelegramNotifyResponse;
+    const raw = await res.text();
+    return JSON.parse(raw) as TelegramNotifyResponse;
   } catch {
     return {
       ok: false,

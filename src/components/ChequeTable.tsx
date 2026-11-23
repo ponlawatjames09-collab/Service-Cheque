@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { BellRing, ChevronRight, Download, Search, X } from 'lucide-react';
+import { ChangeEvent, useMemo, useRef, useState } from 'react';
+import { BellRing, ChevronRight, Download, RefreshCw, Search, Upload, X } from 'lucide-react';
 import {
   CHEQUE_STATUSES,
   ChequeRecord,
@@ -21,6 +21,8 @@ interface ChequeTableProps {
   onStatusFilterChange: (status: string) => void;
   onRequestUpdate: (original: ChequeRecord, updated: ChequeRecord) => void;
   onResendTelegram: (record: ChequeRecord) => void;
+  onImportCsv?: (csvText: string) => Promise<void>;
+  onRefresh?: () => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -32,6 +34,8 @@ export function ChequeTable({
   onStatusFilterChange,
   onRequestUpdate,
   onResendTelegram,
+  onImportCsv,
+  onRefresh,
   isLoading = false,
 }: ChequeTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,6 +45,17 @@ export function ChequeTable({
   const [editZone, setEditZone] = useState<ZoneOwner>('โอ');
   const [editTechnician, setEditTechnician] = useState<string>(TECHNICIANS[0]);
   const [editRemark, setEditRemark] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleCsvFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onImportCsv) return;
+    const text = await file.text();
+    await onImportCsv(text);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const filteredRecords = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -149,6 +164,36 @@ export function ChequeTable({
                 className="min-h-[40px] px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors whitespace-nowrap"
               >
                 ล้างตัวกรอง
+              </button>
+            )}
+            {onImportCsv && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleCsvFileChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="min-h-[40px] px-3.5 py-1.5 text-xs font-medium text-teal-800 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100/70 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>นำเข้า CSV</span>
+                </button>
+              </>
+            )}
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={isLoading}
+                className="min-h-[40px] px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-60 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>รีเฟรช</span>
               </button>
             )}
             <button

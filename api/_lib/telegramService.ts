@@ -154,7 +154,14 @@ export async function sendTelegramNotification(payload: TelegramNotifyBody): Pro
       signal: AbortSignal.timeout(8000),
     });
 
-    const data = (await response.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+    const rawText = await response.text();
+    let data: { ok?: boolean } = {};
+    try {
+      data = JSON.parse(rawText) as { ok?: boolean };
+    } catch {
+      data = {};
+    }
+
     if (!response.ok || !data.ok) {
       return {
         ok: false,

@@ -36,7 +36,7 @@ export const SHEET_HEADERS = [
   'Remark',
   'ผู้รับผิดชอบเขต',
   'สถานะ',
-  'ช่างที่รับผิดชอบ',
+  'ช่างผู้รับผิดชอบ',
 ] as const;
 
 export interface ChequeRecord {
