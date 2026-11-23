@@ -91,12 +91,14 @@ export function validateNotifyBody(body: unknown): { valid: true; data: Telegram
 }
 
 export function isTelegramConfigured(): boolean {
-  return Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim() && process.env.TELEGRAM_CHAT_ID?.trim());
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim().replace(/^["']|["']$/g, '');
+  const chatId = process.env.TELEGRAM_CHAT_ID?.trim().replace(/^["']|["']$/g, '');
+  return Boolean(token && chatId);
 }
 
 export async function sendTelegramNotification(payload: TelegramNotifyBody): Promise<TelegramResult> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim().replace(/^["']|["']$/g, '');
+  const chatId = process.env.TELEGRAM_CHAT_ID?.trim().replace(/^["']|["']$/g, '');
 
   if (!botToken || !chatId) {
     return {

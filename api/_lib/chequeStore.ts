@@ -53,7 +53,7 @@ function resolveStoreFilePath(): string {
 }
 
 export function getValidatedGoogleSheetsWebhookUrl(): string | null {
-  const raw = process.env.GOOGLE_SHEETS_WEBHOOK_URL?.trim();
+  const raw = process.env.GOOGLE_SHEETS_WEBHOOK_URL?.trim().replace(/^["']|["']$/g, '');
   if (!raw) return null;
 
   try {
@@ -365,6 +365,7 @@ export async function listChequeRecords(): Promise<{
   if (webhookUrl) {
     const res = await fetch(webhookUrl, {
       method: 'GET',
+      redirect: 'follow',
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
@@ -423,6 +424,7 @@ export async function createChequeRecord(
   if (webhookUrl) {
     const res = await fetch(webhookUrl, {
       method: 'POST',
+      redirect: 'follow',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'create',
@@ -490,6 +492,7 @@ export async function updateChequeRecord(
   if (webhookUrl) {
     const res = await fetch(webhookUrl, {
       method: 'POST',
+      redirect: 'follow',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'update',
