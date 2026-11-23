@@ -1,0 +1,6 @@
+{
+  "name": "Service Cheque Tracker",
+  "description": "ระบบติดตามการรับเช็ค สรุปยอดรายวัน เชื่อมต่อ Google Sheets และแจ้งเตือนผ่าน Telegram ทันที",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
