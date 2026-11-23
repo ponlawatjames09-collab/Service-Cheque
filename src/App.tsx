@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ClipboardList,
   FilePlus2,
+  FileSpreadsheet,
   LayoutDashboard,
   X,
 } from 'lucide-react';
@@ -10,6 +11,7 @@ import { ChequeForm, ChequeFormValues } from './components/ChequeForm';
 import { ChequeTable } from './components/ChequeTable';
 import { ConfirmMutationModal } from './components/ConfirmMutationModal';
 import { DailyDashboard } from './components/DailyDashboard';
+import { ReceivablesDashboard } from './components/ReceivablesDashboard';
 import {
   createCheque,
   fetchCheques,
@@ -18,10 +20,16 @@ import {
   StorageMode,
   writeCachedLocalRecords,
 } from './lib/chequeApi';
+import {
+  clearUploadedReceivablesCsv,
+  fetchReceivablesDataset,
+  saveUploadedReceivablesCsv,
+} from './lib/receivablesApi';
 import { notifyTelegram } from './lib/telegramClient';
 import { ChequeRecord } from './types/cheque';
+import { parseReceivablesCsv, ReceivablesDataset } from './types/receivable';
 
-type ActiveTab = 'overview' | 'form' | 'list';
+type ActiveTab = 'overview' | 'form' | 'list' | 'receivables';
 
 interface ToastState {
   id: number;
@@ -48,6 +56,9 @@ export default function App() {
   const [isConfirmingMutation, setIsConfirmingMutation] = useState<boolean>(false);
   const [toast, setToast] = useState<ToastState | null>(null);
 
+  const [receivablesDataset, setReceivablesDataset] = useState<ReceivablesDataset | null>(null);
+  const [isLoadingReceivables, setIsLoadingReceivables] = useState<boolean>(true);
+
   const showToast = useCallback((type: ToastState['type'], message: string) => {
     const id = Date.now();
     setToast({ id, type, message });
@@ -70,9 +81,40 @@ export default function App() {
     }
   }, [showToast]);
 
+  const loadReceivables = useCallback(
+    async (forceSheetCheck = false) => {
+      setIsLoadingReceivables(true);
+      try {
+        const data = await fetchReceivablesDataset({ forceSheetCheck });
+        setReceivablesDataset(data);
+        if (forceSheetCheck) {
+          if (data.source === 'live_google_sheet') {
+            clearUploadedReceivablesCsv();
+            showToast(
+              'success',
+              `ซิงค์รายงานลูกหนี้สดจาก Google Sheet สำเร็จ (${data.records.length} รายการ)`
+            );
+          } else {
+            showToast(
+              'warning',
+              'Google Sheet ยังไม่เปิดสิทธิ์สาธารณะ กำลังแสดงข้อมูลล่าสุดจากรายงานในระบบ'
+            );
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'ไม่สามารถโหลดรายงานลูกหนี้ค้างชำระได้';
+        showToast('error', msg);
+      } finally {
+        setIsLoadingReceivables(false);
+      }
+    },
+    [showToast]
+  );
+
   useEffect(() => {
     loadCheques();
-  }, [loadCheques]);
+    loadReceivables(false);
+  }, [loadCheques, loadReceivables]);
 
   const handleCreateCheque = async (values: ChequeFormValues): Promise<boolean> => {
     setIsSubmitting(true);
@@ -167,10 +209,36 @@ export default function App() {
     setStatusFilter((prev) => (prev === status ? 'all' : status));
   };
 
+  const handleImportReceivablesCsv = (csvText: string) => {
+    const parsed = parseReceivablesCsv(csvText);
+    if (parsed.records.length === 0) {
+      showToast('error', 'ไม่พบข้อมูลลูกหนี้ในไฟล์ CSV กรุณาตรวจสอบรูปแบบคอลัมน์');
+      return;
+    }
+    saveUploadedReceivablesCsv(csvText);
+    setReceivablesDataset({
+      source: 'uploaded_csv',
+      sheetAccessible: false,
+      meta: parsed.meta,
+      records: parsed.records,
+    });
+    showToast(
+      'success',
+      `นำเข้ารายงานลูกหนี้ค้างชำระสำเร็จ (${parsed.records.length} รายการ)`
+    );
+  };
+
+  const handleResetReceivablesToSnapshot = () => {
+    clearUploadedReceivablesCsv();
+    void loadReceivables(false);
+    showToast('success', 'รีเซ็ตกลับเป็นข้อมูลรายงานลูกหนี้ชุดตั้งต้นแล้ว');
+  };
+
   const navItems: Array<{ id: ActiveTab; label: string }> = [
     { id: 'overview', label: 'ภาพรวม' },
     { id: 'form', label: 'บันทึกรับเช็ค' },
     { id: 'list', label: 'รายการเช็ค' },
+    { id: 'receivables', label: 'รายงานลูกหนี้ค้างชำระ' },
   ];
 
   return (
@@ -273,17 +341,28 @@ export default function App() {
             isLoading={isSyncing}
           />
         )}
+
+        {activeTab === 'receivables' && (
+          <ReceivablesDashboard
+            dataset={receivablesDataset}
+            isLoading={isLoadingReceivables}
+            onRefresh={() => loadReceivables(true)}
+            onImportCsv={handleImportReceivablesCsv}
+            onResetToSnapshot={handleResetReceivablesToSnapshot}
+          />
+        )}
       </main>
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-white/95 backdrop-blur-md border-t border-slate-200 md:hidden grid grid-cols-3"
+        className="fixed bottom-0 left-0 right-0 z-40 h-14 bg-white/95 backdrop-blur-md border-t border-slate-200 md:hidden grid grid-cols-4"
         aria-label="แถบนำทางมือถือ"
       >
         {(
           [
             { id: 'overview', label: 'ภาพรวม', Icon: LayoutDashboard },
             { id: 'form', label: 'บันทึกเช็ค', Icon: FilePlus2 },
-            { id: 'list', label: 'รายการ', Icon: ClipboardList },
+            { id: 'list', label: 'รายการเช็ค', Icon: ClipboardList },
+            { id: 'receivables', label: 'ลูกหนี้ค้าง', Icon: FileSpreadsheet },
           ] as const
         ).map(({ id, label, Icon }) => {
           const isActive = activeTab === id;
@@ -297,7 +376,7 @@ export default function App() {
               }`}
             >
               <Icon className="w-5 h-5" />
-              <span className="text-[11px] font-medium tracking-tight">{label}</span>
+              <span className="text-[11px] font-medium tracking-tight truncate max-w-full px-1">{label}</span>
             </button>
           );
         })}
