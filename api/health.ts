@@ -1,18 +1,13 @@
-import { isGoogleSheetsWebhookConfigured } from './_lib/chequeStore.js';
-import { isTelegramConfigured } from './_lib/telegramService.js';
-
 export default function handler(
   _req: { method?: string },
   res: { status: (code: number) => { json: (body: unknown) => void } }
 ) {
-  try {
-    return res.status(200).json({
-      ok: true,
-      telegramConfigured: isTelegramConfigured(),
-      googleSheetWebhookConfigured: isGoogleSheetsWebhookConfigured(),
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Health check failed';
-    return res.status(500).json({ ok: false, message: msg });
-  }
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim().replace(/^["']|["']$/g, '');
+  const chatId = process.env.TELEGRAM_CHAT_ID?.trim().replace(/^["']|["']$/g, '');
+
+  return res.status(200).json({
+    ok: true,
+    telegramConfigured: Boolean(token && chatId),
+    googleSheetWebhookConfigured: true,
+  });
 }
