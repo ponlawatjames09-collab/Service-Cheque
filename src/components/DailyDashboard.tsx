@@ -38,7 +38,7 @@ export function DailyDashboard({
   const yesterdayISO = getOffsetDateISO(-1);
   const sevenDaysAgoISO = getOffsetDateISO(-6);
 
-  const [preset, setPreset] = useState<DateRangePreset>('today');
+  const [preset, setPreset] = useState<DateRangePreset>('all');
   const [customDate, setCustomDate] = useState<string>(todayISO);
 
   const filteredByPeriod = useMemo(() => {
@@ -151,7 +151,7 @@ export function DailyDashboard({
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-            สรุปยอดการรับเช็ครายวัน
+            สรุปยอดการรับเช็คทั้งหมด
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">
             ช่วงเวลาที่แสดง: <span className="font-medium text-slate-700">{periodLabel}</span>
